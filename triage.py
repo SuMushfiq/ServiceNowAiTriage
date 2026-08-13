@@ -8,8 +8,12 @@ are flagged for human review instead of auto-applied - this is the
 "know the limits of the AI" behaviour worth pointing to in interviews.
 
 Usage:
-    python triage.py            # triage all open, untriaged incidents
-    python triage.py --seed     # create a handful of test incidents first
+    python triage.py              # triage all open, untriaged incidents
+    python triage.py --seed       # create a handful of test incidents first
+    python triage.py --retriage   # re-process every open incident, ignoring
+                                   # any existing [AI-TRIAGED] marker (use
+                                   # this to backfill fixes to the classifier
+                                   # onto already-triaged tickets)
 """
 
 import sys
@@ -71,7 +75,10 @@ def triage_incident(incident: dict):
         "urgency": classification["urgency"],
         "impact": classification["impact"],
     })
-    note = f"[AI-TRIAGED] Suggested first step: {classification['suggested_first_step']}"
+    note = (
+        f"[AI-TRIAGED] (confidence {classification['confidence']:.2f}) "
+        f"Suggested first step: {classification['suggested_first_step']}"
+    )
     add_work_note(incident["sys_id"], note)
     print(f"  -> Updated in ServiceNow as {priority_label}.")
 
@@ -81,12 +88,19 @@ def main():
         seed_test_data()
         time.sleep(2)  # let ServiceNow index the new records
 
-    incidents = get_open_incidents()
-    untriaged = [i for i in incidents if not already_triaged(i)]
+    retriage = "--retriage" in sys.argv
+    # Retriage needs to see the whole open backlog, not just the newest page,
+    # since the tickets it's meant to fix are often older ones.
+    incidents = get_open_incidents(limit=500) if retriage else get_open_incidents()
 
-    print(f"Found {len(untriaged)} untriaged open incident(s).")
+    if retriage:
+        targets = incidents
+        print(f"Retriage mode: re-processing {len(targets)} open incident(s), ignoring existing [AI-TRIAGED] markers.")
+    else:
+        targets = [i for i in incidents if not already_triaged(i)]
+        print(f"Found {len(targets)} untriaged open incident(s).")
 
-    for incident in untriaged:
+    for incident in targets:
         triage_incident(incident)
 
     print("\nDone.")

@@ -21,14 +21,23 @@ client = OpenAI(
 )
 MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
 
-CATEGORIES = ["Hardware", "Software", "Network", "Access/Account", "Email", "Other"]
+# Must match ServiceNow's actual incident.category choice list exactly
+# (checked via the sys_choice table) - anything else gets silently rejected
+# by the Table API PATCH instead of raising an error.
+CATEGORIES = ["database", "inquiry", "software", "hardware", "password_reset", "network"]
 
 SYSTEM_PROMPT = f"""You are an IT service desk triage assistant. Given a ticket's
 short description and description, classify it and respond with ONLY valid JSON,
 no markdown fences, no preamble. Schema:
 
 {{
-  "category": one of {CATEGORIES},
+  "category": one of {CATEGORIES}
+      - "hardware": physical devices (laptop, mouse, printer, phone)
+      - "software": application or OS issues
+      - "network": connectivity, wifi, VPN
+      - "password_reset": account access, login, or permissions issues
+      - "inquiry": general questions, how-to requests, or email issues
+      - "database": data, reporting, or spreadsheet/backend issues,
   "impact": 1, 2, or 3 (1=High: many users/critical system, 2=Medium, 3=Low: single user, minor),
   "urgency": 1, 2, or 3 (1=High: needs fixing now, 2=Medium, 3=Low: can wait),
   "confidence": float 0.0-1.0 (how confident you are in this classification),
@@ -58,6 +67,6 @@ def classify_ticket(short_description: str, description: str) -> dict:
     result["urgency"] = int(result["urgency"]) if result.get("urgency") in (1, 2, 3) else 2
     result["confidence"] = float(result.get("confidence", 0.5))
     if result.get("category") not in CATEGORIES:
-        result["category"] = "Other"
+        result["category"] = "inquiry"
 
     return result

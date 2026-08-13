@@ -24,7 +24,7 @@ def get_open_incidents(limit: int = 20) -> list[dict]:
     """
     url = f"{SNOW_INSTANCE}/api/now/table/incident"
     params = {
-        "sysparm_query": "active=true^stateNOT IN6,7",  # not resolved/closed
+        "sysparm_query": "active=true^stateNOT IN6,7^ORDERBYDESC sys_created_on",  # not resolved/closed, newest first
         "sysparm_limit": limit,
         "sysparm_fields": "sys_id,number,short_description,description,category,priority,urgency,impact,work_notes",
         "sysparm_display_value": "true",
@@ -32,6 +32,34 @@ def get_open_incidents(limit: int = 20) -> list[dict]:
     resp = requests.get(url, auth=SNOW_AUTH, headers=HEADERS, params=params, timeout=30)
     resp.raise_for_status()
     return resp.json()["result"]
+
+
+def get_all_incidents(page_size: int = 200) -> list[dict]:
+    """Fetch every incident regardless of state, paginating through the full table.
+
+    Used by reporting/dashboard code that needs to see triaged incidents
+    even after they've been resolved or closed (get_open_incidents only
+    returns active ones).
+    """
+    url = f"{SNOW_INSTANCE}/api/now/table/incident"
+    fields = "sys_id,number,short_description,description,category,priority,urgency,impact,work_notes"
+    results = []
+    offset = 0
+    while True:
+        params = {
+            "sysparm_limit": page_size,
+            "sysparm_offset": offset,
+            "sysparm_fields": fields,
+            "sysparm_display_value": "true",
+        }
+        resp = requests.get(url, auth=SNOW_AUTH, headers=HEADERS, params=params, timeout=30)
+        resp.raise_for_status()
+        page = resp.json()["result"]
+        results.extend(page)
+        if len(page) < page_size:
+            break
+        offset += page_size
+    return results
 
 
 def update_incident(sys_id: str, fields: dict) -> dict:
