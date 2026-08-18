@@ -19,7 +19,9 @@ client = OpenAI(
     api_key=os.environ["GEMINI_API_KEY"],
     base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
 )
-MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+# Pinned to a specific model rather than a -latest alias: the aliases move to
+# newer models that can carry much tighter free-tier quotas.
+MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite")
 
 # Must match ServiceNow's actual incident.category choice list exactly
 # (checked via the sys_choice table) - anything else gets silently rejected
